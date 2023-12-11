@@ -5,25 +5,37 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
+	"github.com/go-redis/redis/v8"
 	"time"
 )
 
-func GetStringByString(path string, key string) string {
+func HasKeyByString(path string, key string) bool {
+	err := RedisClient.Get(context.Background(), path+":"+key).Err()
+	return !errors.Is(err, redis.Nil)
+}
+
+func HasKey(path string, key []byte) bool {
+	hashKey := sha256.Sum256(key)
+	return HasKeyByString(path, hex.EncodeToString(hashKey[:]))
+}
+
+func GetStringByString(path string, key string) (string, bool) {
 	value := RedisClient.Get(context.Background(), path+":"+key)
-	return value.Val()
+	return value.Val(), !errors.Is(value.Err(), redis.Nil)
 }
 
-func GetStructByString(path string, key string, value any) error {
-	outString := GetStringByString(path, key)
-	return json.Unmarshal([]byte(outString), value)
+func GetStructByString(path string, key string, value any) (error, bool) {
+	outString, exists := GetStringByString(path, key)
+	return json.Unmarshal([]byte(outString), value), exists
 }
 
-func GetStruct(path string, key []byte, value any) error {
+func GetStruct(path string, key []byte, value any) (error, bool) {
 	hashKey := sha256.Sum256(key)
 	return GetStructByString(path, hex.EncodeToString(hashKey[:]), value)
 }
 
-func GetString(path string, key []byte) string {
+func GetString(path string, key []byte) (string, bool) {
 	hashKey := sha256.Sum256(key)
 	return GetStringByString(path, hex.EncodeToString(hashKey[:]))
 }
